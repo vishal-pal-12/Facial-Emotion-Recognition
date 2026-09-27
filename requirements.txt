@@ -2,9 +2,11 @@
 #  Facial Emotion Recognition — Cloud & Local Requirements
 # ============================================================
 
-# Web Application
+# Web Application & Real-Time Video Streaming
 streamlit>=1.30.0
 altair>=5.0.0
+streamlit-webrtc>=0.47.0
+av>=11.0.0
 
 # Deep Learning (Fast CPU build for cloud deployment)
 tensorflow-cpu>=2.15.0,<2.17.0

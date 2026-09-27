@@ -47,6 +47,32 @@ EMOTION_COLORS = {
     "Sad": "#3498DB",
     "Surprise": "#E67E22"
 }
+EMOTION_COLORS_BGR = {
+    "Angry": (75, 75, 255),       # Red
+    "Disgust": (113, 204, 46),    # Green
+    "Fear": (182, 89, 155),       # Purple
+    "Happy": (15, 196, 241),      # Gold / Yellow
+    "Neutral": (166, 165, 149),   # Gray
+    "Sad": (219, 152, 52),        # Blue
+    "Surprise": (34, 126, 230)    # Orange
+}
+
+# WebRTC Streaming Setup (for continuous real-time webcam)
+try:
+    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+    import av
+    WEBRTC_AVAILABLE = True
+    RTC_CONFIGURATION = RTCConfiguration(
+        {
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:global.stun.twilio.com:3478"]}
+            ]
+        }
+    )
+except Exception:
+    WEBRTC_AVAILABLE = False
+    RTC_CONFIGURATION = None
 
 # -------------------------------------------------------------
 # CUSTOM STYLING (CSS)
@@ -142,6 +168,56 @@ def detect_and_preprocess_faces(image_np):
 
 
 # -------------------------------------------------------------
+# WEBRTC VIDEO PROCESSOR (CONTINUOUS REAL-TIME DETECTION)
+# -------------------------------------------------------------
+if WEBRTC_AVAILABLE:
+    class EmotionVideoProcessor(VideoProcessorBase):
+        def __init__(self):
+            self.cascade = cv2.CascadeClassifier(CASCADE_PATH)
+
+        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+            img = frame.to_ndarray(format="bgr24")
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            faces = self.cascade.detectMultiScale(
+                gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
+            )
+
+            for (x, y, w, h) in faces:
+                roi_gray = gray[y:y+h, x:x+w]
+                resized = cv2.resize(roi_gray, (IMG_SIZE, IMG_SIZE))
+                tensor = resized.astype(np.float32) / 255.0
+                tensor = np.expand_dims(tensor, axis=(0, -1))
+
+                if model is not None:
+                    # Ultra-fast direct graph call (~15-30ms)
+                    preds = model(tensor, training=False).numpy()[0]
+                    pred_idx = int(np.argmax(preds))
+                    pred_label = EMOTIONS[pred_idx]
+                    confidence = float(preds[pred_idx]) * 100
+                    color_bgr = EMOTION_COLORS_BGR.get(pred_label, (46, 204, 113))
+
+                    # Draw bounding box
+                    cv2.rectangle(img, (x, y), (x + w, y + h), color_bgr, 3)
+
+                    # Text Header Label with solid background
+                    label_text = f"{pred_label} {confidence:.0f}%"
+                    (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                    cv2.rectangle(img, (x, max(0, y - th - 12)), (x + tw + 10, y), color_bgr, -1)
+                    cv2.putText(
+                        img,
+                        label_text,
+                        (x + 5, max(th + 2, y - 6)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (255, 255, 255),
+                        2,
+                        cv2.LINE_AA
+                    )
+
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+
+# -------------------------------------------------------------
 # SIDEBAR
 # -------------------------------------------------------------
 with st.sidebar:
@@ -187,7 +263,12 @@ st.markdown('<div class="sub-header">Real-time facial expression analysis powere
 # Mode Selector
 mode = st.radio(
     "Choose Input Source:",
-    ["📷 Live Camera (Webcam)", "📁 Upload Image File", "🖼️ Sample Test Gallery"],
+    [
+        "🎥 Continuous Live Stream (Real-Time)",
+        "📸 Snapshot Camera (Photo Booth)",
+        "📁 Upload Image File",
+        "🖼️ Sample Test Gallery"
+    ],
     horizontal=True
 )
 
@@ -195,9 +276,40 @@ st.markdown("---")
 
 input_image = None
 
-# Mode 1: Live Webcam
-if mode == "📷 Live Camera (Webcam)":
-    st.write("Take a snapshot with your device camera to predict emotions instantly:")
+# Mode 1: Continuous Live Stream (Real-Time WebRTC)
+if mode == "🎥 Continuous Live Stream (Real-Time)":
+    st.markdown("#### 🎥 Live Camera Stream (Real-Time Emotion Tracking)")
+    st.info("Click **'START'** below to activate your camera. The AI model will track your face and predict emotions continuously frame-by-frame in real-time, exactly like the desktop app!")
+
+    if WEBRTC_AVAILABLE:
+        col_stream, col_info = st.columns([1.6, 1], gap="large")
+        with col_stream:
+            webrtc_streamer(
+                key="emotion-live-stream",
+                video_processor_factory=EmotionVideoProcessor,
+                rtc_configuration=RTC_CONFIGURATION,
+                media_stream_constraints={"video": True, "audio": False},
+                async_processing=True,
+            )
+        with col_info:
+            st.markdown("##### 💡 How to use")
+            st.markdown("""
+            - Click **START** to turn on the camera.
+            - Allow webcam access when prompted by the browser.
+            - Look straight into the camera.
+            - Change facial expressions (**Happy, Angry, Surprise, Sad, etc.**).
+            - The bounding box and emotion label track your face automatically.
+            - Click **STOP** when you want to pause or turn off the camera.
+            """)
+            st.markdown("##### 🏷️ 7 Recognizable Emotions")
+            for emo, emoji in EMOTION_EMOJIS.items():
+                st.markdown(f"- **{emoji} {emo}**")
+    else:
+        st.warning("`streamlit-webrtc` is not available in the current environment.")
+
+# Mode 2: Snapshot Camera (Photo Booth)
+elif mode == "📸 Snapshot Camera (Photo Booth)":
+    st.write("Take a snapshot with your device camera to predict emotions and view full 7-class probability breakdown:")
     camera_photo = st.camera_input("Smile / Express an Emotion")
     if camera_photo is not None:
         input_image = Image.open(camera_photo)
