@@ -1,7 +1,8 @@
 data/
-models/
 venv/
 __pycache__/
-*.h5
-*.keras
 *.pt
+models/*
+!models/best_model.h5
+!models/best_model.keras
+!models/emotion_cnn_best.keras

@@ -167,37 +167,71 @@ def overlay_gradcam(original_img_gray, heatmap):
 
 
 # ---------------------------------------------
-# SAFE UNIVERSAL MODEL LOADER (Keras 2 & Keras 3)
+# SAFE UNIVERSAL MODEL LOADER (H5 & Keras 2/3)
 # ---------------------------------------------
-def safe_load_model(model_path, compile=True):
+def safe_load_model(model_path=None, compile=False):
     """
     Universally loads a Keras model across both Keras 2 and Keras 3 environments.
-    Resolves the BatchNormalization axis deserialization incompatibility.
+    Checks H5 first (ultra-compatible & fast), then .keras with tf.keras, tf_keras, and keras.
     """
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found: {model_path}")
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-    # 1. Try tf_keras (handles legacy Keras 2 models in TensorFlow 2.16+ / Python 3.12)
-    try:
-        import tf_keras
-        return tf_keras.models.load_model(model_path, compile=compile)
-    except Exception:
-        pass
+    search_paths = []
+    if model_path:
+        search_paths.append(model_path)
+        if not os.path.isabs(model_path):
+            search_paths.append(os.path.join(root_dir, model_path))
+        if model_path.endswith('.keras'):
+            search_paths.insert(0, model_path.replace('.keras', '.h5'))
+            search_paths.insert(1, os.path.join(root_dir, model_path.replace('.keras', '.h5')))
 
-    # 2. Try standard tf.keras
-    try:
-        import tensorflow as tf
-        return tf.keras.models.load_model(model_path, compile=compile)
-    except Exception:
-        pass
+    for standard_name in ['models/best_model.h5', 'models/best_model.keras', 'models/emotion_cnn_best.keras']:
+        search_paths.append(standard_name)
+        search_paths.append(os.path.join(root_dir, standard_name))
 
-    # 3. Try standard keras
-    try:
-        import keras
-        return keras.models.load_model(model_path, compile=compile)
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to load model '{model_path}'. "
-            f"If using TensorFlow >= 2.16 / Python 3.12, please install tf_keras: pip install tf_keras. "
-            f"Error: {e}"
+    seen = set()
+    valid_candidates = []
+    for p in search_paths:
+        abs_p = os.path.abspath(p)
+        if abs_p not in seen and os.path.exists(abs_p):
+            seen.add(abs_p)
+            valid_candidates.append(abs_p)
+
+    if not valid_candidates:
+        raise FileNotFoundError(
+            f"No model file found. Checked: {search_paths}. "
+            f"Working dir: {os.getcwd()}, Root dir: {root_dir}"
         )
+
+    # Put .h5 models first (immune to Keras 3 BatchNormalization axis deserialization bug)
+    h5_candidates = [p for p in valid_candidates if p.endswith('.h5')]
+    other_candidates = [p for p in valid_candidates if not p.endswith('.h5')]
+    sorted_candidates = h5_candidates + other_candidates
+
+    errors = []
+    for path in sorted_candidates:
+        # 1. Standard tf.keras (handles .h5 flawlessly with compile=False)
+        try:
+            import tensorflow as tf
+            return tf.keras.models.load_model(path, compile=compile)
+        except Exception as e_tf:
+            errors.append(f"tf.keras on {os.path.basename(path)}: {e_tf}")
+
+        # 2. tf_keras (handles legacy Keras 2 models in TF 2.16+)
+        try:
+            import tf_keras
+            return tf_keras.models.load_model(path, compile=compile)
+        except Exception as e_tfk:
+            errors.append(f"tf_keras on {os.path.basename(path)}: {e_tfk}")
+
+        # 3. Native keras
+        try:
+            import keras
+            return keras.models.load_model(path, compile=compile)
+        except Exception as e_k:
+            errors.append(f"keras on {os.path.basename(path)}: {e_k}")
+
+    raise RuntimeError(
+        f"Failed to load model from candidates: {[os.path.basename(p) for p in sorted_candidates]}. "
+        f"Details: {'; '.join(errors)}"
+    )

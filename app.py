@@ -23,8 +23,8 @@ st.set_page_config(
 # -------------------------------------------------------------
 # CONSTANTS & CONFIG
 # -------------------------------------------------------------
-MODEL_PATH = "models/best_model.keras"
-FALLBACK_MODEL_PATH = "models/emotion_cnn_best.keras"
+MODEL_PATH = "models/best_model.h5"
+FALLBACK_MODEL_PATH = "models/best_model.keras"
 CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 IMG_SIZE = 48
 
@@ -92,15 +92,13 @@ st.markdown("""
 # -------------------------------------------------------------
 @st.cache_resource(show_spinner="Loading trained CNN model...")
 def load_emotion_model():
-    """Loads model universally using safe_load_model."""
+    """Loads model universally using safe_load_model with compile=False."""
     from utils.helpers import safe_load_model
-
-    target_path = MODEL_PATH if os.path.exists(MODEL_PATH) else FALLBACK_MODEL_PATH
-    if not os.path.exists(target_path):
-        st.error(f"Trained model not found at '{target_path}'. Please ensure weights exist.")
+    try:
+        return safe_load_model(MODEL_PATH, compile=False)
+    except Exception as err:
+        st.error(f"Error loading emotion recognition model: {err}")
         return None
-    
-    return safe_load_model(target_path)
 
 
 model = load_emotion_model()
