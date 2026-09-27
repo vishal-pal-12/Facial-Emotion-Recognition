@@ -1,22 +1,7 @@
-# Virtual environments
-venv/
-venv_legacy/
-.venv/
-env/
-
-# Python bytecode & caches
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-
-# Large local training dataset (FER2013 image tree: 35,887 files)
-# Keeps repo fast, lightweight (<70MB) and build-friendly on Streamlit Cloud
 data/
-
-# IDE & OS caches
-.vscode/
-.idea/
-Thumbs.db
-.DS_Store
+models/
+venv/
+__pycache__/
+*.h5
+*.keras
+*.pt

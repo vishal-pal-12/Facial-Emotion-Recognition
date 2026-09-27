@@ -7,9 +7,13 @@
 import os
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from sklearn.metrics import classification_report, confusion_matrix
+except ImportError:
+    plt = None
+    sns = None
 
 # Deterministic and explicit class-index mapping
 CLASS_NAMES = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
