@@ -7,9 +7,6 @@
 import os
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix
 
 # Deterministic and explicit class-index mapping
 CLASS_NAMES = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
@@ -64,6 +61,7 @@ def plot_class_distribution(y_train, y_val=None, y_test=None, save_path='results
     Bar chart showing sample counts per emotion class in each split.
     Highlights the class imbalance in FER2013 (Disgust is rare).
     """
+    import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(10, 5))
     x = np.arange(len(EMOTION_LABELS))
     w = 0.25
@@ -97,6 +95,7 @@ def plot_class_distribution(y_train, y_val=None, y_test=None, save_path='results
 # ---------------------------------------------
 def show_sample_images(X, y, n_per_class=4, save_path='results/sample_images_per_class.png'):
     """Show n_per_class sample images for each emotion label."""
+    import matplotlib.pyplot as plt
     fig, axes = plt.subplots(len(EMOTION_LABELS), n_per_class,
                              figsize=(n_per_class * 2, len(EMOTION_LABELS) * 2))
     for cls_idx, label in enumerate(EMOTION_LABELS):
